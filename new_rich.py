@@ -2,16 +2,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import quadracheer as qc
 from scipy.special import legendre
+from scipy.interpolate import BarycentricInterpolator as bi
 
 def dist(x1,x2): return np.sqrt((x2[0] - x1[0]) ** 2 + (x2[1] - x1[1]) ** 2)
 single_layer = lambda x1: lambda x2: (-1.0 / (2 * np.pi)) * np.log(dist(x1,x2))
 double_layer = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 2)
-hypersing = lambda x1: lambda x2: (x2[0] - x1[0]) * (x1[1] - x2[1]) / (dist(x1, x2) ** 4)
+superhyper = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 8)
+hypersing = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 4)
 
-basis = legendre(16)
-kernel = lambda x1: lambda x2: basis(x2[0]) * single_layer(x1)(x2)
-# kernel = lambda x1: lambda x2: basis(x2[0]) * double_layer(x1)(x2)
-# kernel = lambda x1: lambda x2: basis(x2[0]) * hypersing(x1)(x2)
+test_problems = dict()
+test_problems['single1'] = (single_layer, legendre(1), 0.0628062411975970, True)
+test_problems['single16'] = (single_layer, legendre(16), -0.00580747813511577, True)
+test_problems['double1'] = (double_layer, legendre(1), 1.91890697837663, True)
+test_problems['double16'] = (double_layer, legendre(16), 0.113028326740308, True)
+test_problems['super0'] = (superhyper, legendre(0), -0.579967, False)
+test_problems['hyper16'] = (hypersing, legendre(0), 0.505981109454, False)
 
 def integrate(x_min, x_max, f, q):
     x = q[0]
@@ -39,77 +44,110 @@ def recursive(sing_pt, sizes, f, q, include_pt = False):
     return start + rem
 
 
-def richardson(values, step, log = False):
+def richardson(hs, values, step):
     rich = [values]
+    hs_ratio = hs[:-1] / hs[1:]
     for m in range(1, len(values)):
-        # if m == 1 and log is True:
-        #     factor =
         prev_rich = rich[m - 1]
-        mult = step ** (2 * m - 1)
+        mult = hs_ratio[(m - 1):] ** m
         factor = (1.0 / (mult - 1.0))
         next_rich = factor * (mult * prev_rich[1:] - prev_rich[:-1])
         rich.append(next_rich)
     return rich
 
+def interp(values, xs):
+    res = []
+    for i in range(2, len(xs) + 1):
+        L = bi(xs[:i])
+        L.set_yi(values[:i])
+        res.append(L(0.0))
+    return res
 
-def simple():
-
-    high_quad_order = 500
-    highquad = qc.gaussxw(high_quad_order)
-    med_quad_order = 100
-    medquad = qc.gaussxw(med_quad_order)
-
-    low_quad_order = 16
-    lowquad = qc.gaussxw(low_quad_order)
-    safe_dist = 6.0 / low_quad_order
-    print safe_dist
-
-    n = 8
-    step = 2.0
-    hs = safe_dist * ((1.0 / step) ** np.arange(0, n))
-    print hs
-
-    sing_pt = 0.2
-    d = 0.01
-    perfect = -0.00580747813511577
-    # perfect = 0.113028326740308
-    # perfect = 0.505981109454
-
-    integrals = []
-    for i, h in enumerate(hs):
-        f = kernel([sing_pt, h])
-        est = recursive(sing_pt, hs[:max(2, i)], f, lowquad)
-        exact = recursive(sing_pt, hs[:max(2, i)], f, medquad)
-        error = abs(est - exact)
-        print error
-        integrals.append(est)
-    integrals = np.array(integrals)
-    # print integrals[-1]
-    print integrals[-1] - perfect
-
-    rich = richardson(integrals, step)
-    # print rich[-1][-1]
-    print rich[-3][-1] - perfect
-    plt.loglog(hs, np.abs(integrals - perfect), label = 0)
-    for i in range(1, len(rich)):
+def plot_all_rich(hs, rich, perfect):
+    for i in range(0, len(rich)):
         plt.loglog(hs[i:], np.abs(rich[i] - perfect), '.-', linewidth = 2, label = i)
     plt.legend()
     plt.show()
 
+def plot_best_rich(hs, rich, perfect):
+    best = [abs(r[0] - perfect) for r in rich]
+    print hs
+    print best
+    plt.loglog(hs, best, 'o-', linewidth = 2, label = "RICH")
+    plt.xlabel('$h$')
+    plt.ylabel('$E$')
+    plt.show()
+
+def simple():
+    high_quad_order = 500
+    highquad = qc.gaussxw(high_quad_order)
+    med_quad_order = 100
+    medquad = qc.gaussxw(med_quad_order)
+    low_quad_order = 8
+    lowquad = qc.gaussxw(low_quad_order)
+
+    safe_dist = 6.0 / low_quad_order
+
+    n = 10
+    step = 2.0
+    hs = safe_dist * ((1.0 / step) ** np.arange(0, n))
+    print("Distances are: " + str(hs))
+
+    sing_pt = 0.2
+    d = 0.01
+
+    which = 'double1'
+    which = 'double16'
+    # which = 'super0'
+    # which = 'single16'
+    # which = 'hyper16'
+    K, basis, perfect, include_pt = test_problems[which]
+    print("Correct answer is: " + str(perfect))
+    kernel = lambda x1: lambda x2: basis(x2[0]) * K(x1)(x2)
+
+    integrals = []
+    for i, h in enumerate(hs):
+        f = kernel([sing_pt, h])
+        est = recursive(sing_pt, hs[:], f,
+                        lowquad, include_pt = include_pt)
+        exact = recursive(sing_pt, hs[:], f,
+                          medquad, include_pt = include_pt)
+        error = abs(est - exact)
+        print("Integration error " + str(i) + ": " + str(error))
+        integrals.append(est)
+    integrals = np.array(integrals)
+    no_rich_error = integrals[-1] - perfect
+    print("Raw integral error: " + str(no_rich_error))
+
+    rich = richardson(hs, integrals, step)
+    print("Best richardson error: " + str(rich[-3][-1] - perfect))
+
+    interp_est = interp(integrals, hs)
+    # print("Interpolation error: " + str(np.array(interp_est) - perfect))
+
+    # plot_all_rich(hs, rich, perfect)
+    plot_best_rich(hs, rich, perfect)
+
 def rich_fun():
     src_pt = [0.0, -0.5]
-    K = kernel(src_pt)
+    K = single_layer(src_pt)
     I = K([0.0, 0.0])
     hs = np.linspace(0.000, 1.0, 101.0)[1:]
     I_est = np.array([K([0.0, h]) for h in hs])
     hs_ratio = hs[1:] / hs[:-1]
     print hs_ratio
-    better_est = (hs_ratio * I_est[:-1] - I_est[1:]) / (hs_ratio - 1)
-    even_better_est = (hs_ratio[:-1] ** 2 * better_est[:-1] - better_est[1:]) / (hs_ratio[:-1] ** 2 - 1)
-    import ipdb; ipdb.set_trace()
-    plt.plot(hs, I_est - I, 'y-')
-    plt.plot(hs[:-1], better_est - I, 'g-')
-    plt.plot(hs[:-2], even_better_est - I, 'b-')
+    new_ests = [I_est]
+    n = 9
+    for i in range(n):
+        factor = hs_ratio[i:] ** (i + 1)
+        better = (factor * new_ests[i][:-1] - new_ests[i][1:]) / (factor - 1)
+        new_ests.append(better)
+    for i in range(n):
+        x = hs[:-i]
+        if i is 0:
+            x = hs
+        plt.plot(x, new_ests[i] - I, label = i, linewidth = 3)
+    plt.legend()
     plt.show()
 
 if __name__ == '__main__':
