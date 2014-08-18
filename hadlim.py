@@ -3,9 +3,12 @@ import quadracheer as qc
 from scipy.special import legendre
 basis = legendre(16)
 sing_pt = 0.5
-gauss = {i:qc.gaussxw(i) for i in range(1, 17)}
-gauss128 = qc.gaussxw(128)
-func = lambda x: basis(x) * np.log(np.abs(x - sing_pt))
+gauss = {i:qc.gaussxw(i) for i in range(1, 512, 8)}
+gauss_high = qc.gaussxw(1024)
+# func = lambda x: basis(x) * np.log(np.abs(x - sing_pt))
+# exact = 0.0243191054613544
+func = lambda x: basis(x) * (x - sing_pt) / ((x - sing_pt) ** 3)
+exact = -0.46579
 def integrate(x_min, x_max, q):
     x = q[0]
     w = q[1]
@@ -19,31 +22,53 @@ def with_hole(h, q):
 def donut(ho, hi, q):
     return integrate(sing_pt - ho, sing_pt - hi, q) + integrate(sing_pt + hi, sing_pt + ho, q)
 
-n = 24
-hs = 0.1 * (0.5 ** np.arange(0, n))
+n = 10
+step = 4.0
+hs = 0.25 * ((1.0 / step) ** np.arange(0, n))
+print hs
 
-ests = []
+ests = [[]]
 
+total_pts = 16
 for m in range(n):
     if m > 0:
         outer = hs[m - 1]
         previous = ests[0][-1]
+        # exact = ests[-1][-1]
     else:
+        # exact = 0
         outer = 0.5
-        previous = with_hole(0.5, gauss[16])
-    addt = donut(outer, hs[m], gauss[max(3, 16 - 1 * m)])
-    addt_ex = donut(outer, hs[m], gauss128)
-    assert(abs(addt - addt_ex) < 1e-11)
+        previous = with_hole(0.5, gauss[17])
+        previous_exact = with_hole(0.5, gauss_high)
+        print abs(previous - previous_exact)
+    pts = 8 * 24 + 1
+    total_pts += pts
+    addt = donut(outer, hs[m], gauss[pts])
+    addt_ex = donut(outer, hs[m], gauss_high)
+    # for hypersingular
+    if m > 0:
+        print (2 * basis(sing_pt) / hs[m]) - (2 * basis(sing_pt) / hs[m-1])
+    print hs[m]
+    print addt
+    print addt_ex
+    assert(abs(addt - addt_ex) < 1e-8)
     current = previous + addt
-    ests.append([])
     ests[0].append(current)
-    for i in range(1, m + 1):
-        factor = 1.0 / (2.0 ** i - 1.0)
-        prev_bad = ests[i-1][-2]
-        prev_good = ests[i-1][-1]
-        ests[i].append(factor * ((2.0 ** i) * prev_good - prev_bad))
+    # ests.append([])
+    # for i in range(1, m + 1):
+    #     factor = 1.0 / ((step ** (i) - 1.0)
+    #     prev_bad = ests[i - 1][-2]
+    #     prev_good = ests[i - 1][-1]
+    #     new = factor * ((step ** i) * prev_good - prev_bad)
+    #     ests[i].append(new)
+    # print ests
+    best_yet = ests[-1][-1]
+    best_no_rich = ests[0][-1]
+    error = abs(exact - best_yet)
+    no_rich_err = abs(exact - best_no_rich)
+    print "After " + str(m) + " iterations: " + str(error) + "     with value: " + str(best_yet)
+    print "Without Richardson, best is: " + str(no_rich_err) + "    with value: " + str(best_no_rich)
 
-exact = 0.0243191
-print ests[-1][-1]
-print ests[0][-1]
-print abs(ests[-1][-1] - exact)
+initial = ests[0]
+import ipdb; ipdb.set_trace()
+print total_pts

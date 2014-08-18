@@ -65,7 +65,6 @@ for n_q in n_qs:
         init = [eval(d, quad_low, kernel) for d in ds]
         # init_exact = np.array([eval(d, quad_high) for d in ds])
         poly = spi.lagrange(ds, init)
-        taylor_exp = []
         result = poly(0.0)
         error = abs(result - exact)
         convergence = abs(result - prev)

@@ -21,9 +21,6 @@ def integrate(f, quad_rule):
         sum += w * f([p, 0.0])
     return sum
 
-quad_orders = [16, 256, 5000]
-quad_rules = [(qc.gaussxw(n), str(n) + " order gauss") for n in quad_orders]
-
 def dist(x1,x2): return np.sqrt((x2[0] - x1[0]) ** 2 + (x2[1] - x1[1]) ** 2)
 # The laplace single layer potential
 single_layer = lambda x1: lambda x2: (-1.0 / (2 * np.pi)) * np.log(dist(x1,x2))
@@ -56,6 +53,7 @@ def test(n_q, n, outer_pt, K, exact, step = 2.0, dist_mult = 5):
         factor = (1.0 / (step ** m - 1.0))
         next_rich = factor * ((step ** m) * prev_rich[1:] - prev_rich[:-1])
         rich.append(next_rich)
+    print rich
 
     final_est = rich[-1][-1]
     error = abs(final_est - exact)
