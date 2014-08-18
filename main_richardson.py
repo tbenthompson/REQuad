@@ -3,6 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import quadracheer as qc
 from scipy.special import hankel1, jn
+from scipy.special import legendre
 import scipy.interpolate as spi
 from functools import partial
 from math import factorial
@@ -25,32 +26,25 @@ quad_rules = [(qc.gaussxw(n), str(n) + " order gauss") for n in quad_orders]
 
 def dist(x1,x2): return np.sqrt((x2[0] - x1[0]) ** 2 + (x2[1] - x1[1]) ** 2)
 # The laplace single layer potential
-# K = lambda x1: lambda x2: (-1.0 / (2 * np.pi)) * np.log(dist(x1,x2))
+single_layer = lambda x1: lambda x2: (-1.0 / (2 * np.pi)) * np.log(dist(x1,x2))
+
 # The laplace double layer potential
-K = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 3)
+double_layer = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 2)
 
+# Hypersingular thingamabob
+hypersing = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 3)
 
-n = 9
-n_q = 128
-outer_pt = [0.2, 0.0]
-for n_q in 2 ** np.arange(1, 10):
+quad_high = qc.gaussxw(2000)
+def test(n_q, n, outer_pt, K, exact, step = 2.0, dist_mult = 5):
     quad_low = qc.gaussxw(n_q)
-    quad_high = qc.gaussxw(5000)
-    # exact = integrate(K([outer_pt[0], outer_pt[1]]), quad_high)
-    # exact = 0.311900553157219
-    exact = -0.41668101144
-    start = 5 * (2.0 / n_q)
-    step = 2.0
+    start = dist_mult * (2.0 / n_q)
     ds = (start * (step ** np.arange(0, n))).tolist()
     ds.reverse()
-    # print ds
 
     def eval(d, q):
         return integrate(K([outer_pt[0], outer_pt[1] + d]), q)
 
     init = np.array([eval(d, quad_low) for d in ds])
-    init_exact = np.array([eval(d, quad_high) for d in ds])
-    # print np.abs(init - init_exact)
     # print(str(init))
     rich = [init]
     for m in range(1, n):
@@ -66,24 +60,39 @@ for n_q in 2 ** np.arange(1, 10):
     final_est = rich[-1][-1]
     error = abs(final_est - exact)
     error_estimate = 2 * abs(final_est - rich[-2][-1])
-    print error
-# print("Final estimate: " + str(final_est))
-# print("Final error estimate:" + str(error_estimate))
-# print("Final error: " + str(error))
-# print("Exact: " + str(exact))
+    return error
 
+# n = 9
+# n_q = 128
+# outer_pt = [0.2, 0.0]
+# exact = 0.311900553157219
+# kernel = single_layer
+# outer_pt = [-0.5, 0.0]
+# exact = 0.276671121911897
+# kernel = single_layer
+# outer_pt = [0.5, 0.0]
+# exact = -1.09861228866811
+# kernel = double_layer
+outer_pt = [0.02, 0.0]
+exact = -0.294837925881334
+basis = legendre(40)
+kernel = lambda x1: lambda x2: basis(x2[0]) * double_layer(x1)(x2)
+# for n_q in 2 ** np.arange(1, 10):
+#     print test(n_q, n, single_layer, exact)
 
-# integrate(outer_pt
-
-# view = [0.005, 5.0]
-# pts = np.linspace(view[0], view[1], 250)
-# results = [[integrate(K([outer_pt[0], p]), q[0]) for p in pts] for q in quad_rules]
-#
-# colors = ['r-', 'b-', 'k-']
-# for i, (r, q) in enumerate(zip(results, quad_rules)[:-1]):
-#     error = np.abs(np.array(r) - np.array(results[-1]))
-#     plt.plot(pts, (np.log(error / np.abs(np.array(r))) / np.log(10)), colors[i], label=q[1], linewidth = 3)
-# plt.legend(loc = 'lower left')
-# plt.xlabel('$x$')
-# plt.ylabel('$\log_{10}(e)$')
-# plt.show()
+ns = [12]
+n_q = 240
+steps = [1.2]
+dms = [7.0]
+best = 1000
+for dist_mult in dms:
+    # for n in range(6, 16, 2):
+    for n in ns:
+        for step in steps:
+            e = test(n_q, n, outer_pt, kernel,
+                     exact, step = step, dist_mult = dist_mult)
+            if e < best:
+                best = e
+                best_info = (step, n, dist_mult)
+print best
+print best_info
