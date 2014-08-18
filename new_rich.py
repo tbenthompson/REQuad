@@ -128,6 +128,9 @@ def simple():
     # plot_all_rich(hs, rich, perfect)
     plot_best_rich(hs, rich, perfect)
 
+    # A RANDOM NUMBER! http://xkcd.com/221/
+    print 88
+
 def rich_fun():
     src_pt = [0.0, -0.5]
     K = single_layer(src_pt)
