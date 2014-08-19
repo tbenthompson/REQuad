@@ -1,22 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import quadracheer as qc
 from scipy.special import legendre
+from gaussian_quad import gaussxw
 from scipy.interpolate import BarycentricInterpolator as bi
+import sympy as sp
 
-def dist(x1,x2): return np.sqrt((x2[0] - x1[0]) ** 2 + (x2[1] - x1[1]) ** 2)
-single_layer = lambda x1: lambda x2: (-1.0 / (2 * np.pi)) * np.log(dist(x1,x2))
-double_layer = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 2)
-superhyper = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 8)
-hypersing = lambda x1: lambda x2: (x2[0] - x1[0]) / (dist(x1, x2) ** 4)
 
-test_problems = dict()
-test_problems['single1'] = (single_layer, legendre(1), 0.0628062411975970, True)
-test_problems['single16'] = (single_layer, legendre(16), -0.00580747813511577, True)
-test_problems['double1'] = (double_layer, legendre(1), 1.91890697837663, True)
-test_problems['double16'] = (double_layer, legendre(16), 0.113028326740308, True)
-test_problems['super0'] = (superhyper, legendre(0), -0.579967, False)
-test_problems['hyper16'] = (hypersing, legendre(0), 0.505981109454, False)
 
 def integrate(x_min, x_max, f, q):
     x = q[0]
@@ -69,41 +58,33 @@ def plot_all_rich(hs, rich, perfect):
     plt.legend()
     plt.show()
 
-def plot_best_rich(hs, rich, perfect):
+def plot_best_rich(hs, rich, perfect, which):
     best = [abs(r[0] - perfect) for r in rich]
-    print hs
-    print best
-    plt.loglog(hs, best, 'o-', linewidth = 2, label = "RICH")
-    plt.xlabel('$h$')
-    plt.ylabel('$E$')
-    plt.show()
+    fig, ax = plt.subplots(1)
+    ax.loglog(hs, best, 'o-', linewidth = 2, label = "RICH")
+    ax.set_xlabel('$h$')
+    ax.set_ylabel('$E$')
+    fig.savefig('error_' + which + '.pdf')
 
-def simple():
+def run(problem, name):
+    K, sing_pt, basis, perfect, include_pt = problem
+
     high_quad_order = 500
-    highquad = qc.gaussxw(high_quad_order)
+    highquad = gaussxw(high_quad_order)
     med_quad_order = 100
-    medquad = qc.gaussxw(med_quad_order)
-    low_quad_order = 8
-    lowquad = qc.gaussxw(low_quad_order)
+    medquad = gaussxw(med_quad_order)
+    low_quad_order = 16
+    lowquad = gaussxw(low_quad_order)
 
     safe_dist = 6.0 / low_quad_order
 
-    n = 10
+    n = 4
     step = 2.0
     hs = safe_dist * ((1.0 / step) ** np.arange(0, n))
     print("Distances are: " + str(hs))
 
-    sing_pt = 0.2
-    d = 0.01
-
-    which = 'double1'
-    which = 'double16'
-    # which = 'super0'
-    # which = 'single16'
-    # which = 'hyper16'
-    K, basis, perfect, include_pt = test_problems[which]
     print("Correct answer is: " + str(perfect))
-    kernel = lambda x1: lambda x2: basis(x2[0]) * K(x1)(x2)
+    kernel = lambda x1: lambda x2: basis(x2[0]) * K(x1[0], x2[0], x1[1], x2[1])
 
     integrals = []
     for i, h in enumerate(hs):
@@ -113,46 +94,62 @@ def simple():
         exact = recursive(sing_pt, hs[:], f,
                           medquad, include_pt = include_pt)
         error = abs(est - exact)
-        print("Integration error " + str(i) + ": " + str(error))
+        print("Quadrature error " + str(i) + ": " + str(error) + "   and " +
+              "Distance error " + str(i) + ": " + str(exact - perfect))
         integrals.append(est)
     integrals = np.array(integrals)
     no_rich_error = integrals[-1] - perfect
     print("Raw integral error: " + str(no_rich_error))
 
     rich = richardson(hs, integrals, step)
-    print("Best richardson error: " + str(rich[-3][-1] - perfect))
+    print("Best richardson error: " + str(abs(rich[-1][-1] - perfect))) + "\n\n"
 
     interp_est = interp(integrals, hs)
     # print("Interpolation error: " + str(np.array(interp_est) - perfect))
 
     # plot_all_rich(hs, rich, perfect)
-    plot_best_rich(hs, rich, perfect)
+    plot_best_rich(hs, rich, perfect, name)
 
-    # A RANDOM NUMBER! http://xkcd.com/221/
+    # This prints a random number
     print 88
 
-def rich_fun():
-    src_pt = [0.0, -0.5]
-    K = single_layer(src_pt)
-    I = K([0.0, 0.0])
-    hs = np.linspace(0.000, 1.0, 101.0)[1:]
-    I_est = np.array([K([0.0, h]) for h in hs])
-    hs_ratio = hs[1:] / hs[:-1]
-    print hs_ratio
-    new_ests = [I_est]
-    n = 9
-    for i in range(n):
-        factor = hs_ratio[i:] ** (i + 1)
-        better = (factor * new_ests[i][:-1] - new_ests[i][1:]) / (factor - 1)
-        new_ests.append(better)
-    for i in range(n):
-        x = hs[:-i]
-        if i is 0:
-            x = hs
-        plt.plot(x, new_ests[i] - I, label = i, linewidth = 3)
-    plt.legend()
-    plt.show()
+def main():
+    """
+    Start with the poisson equation single layer potential
+    Take normal derivative with respect to observation variable to get double
+    layer potential.
+    Take normal derivative with respect to source/integration variable to get
+    hypersingular potential
+    Normal derivatives are in the y direction because the element is along
+    the x-axis
+    """
+    x1, x2, y1, y2 = sp.symbols('x1, x2, y1, y2')
+    dist = sp.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+    slp = -1 / (2 * sp.pi) * sp.log(dist)
+    dlp = sp.diff(slp, y1)
+    hlp = sp.diff(dlp, y2)
+    args = (x1, x2, y1, y2)
+    single_layer = sp.utilities.lambdify(args, slp)
+    double_layer = sp.utilities.lambdify(args, dlp)
+    hypersing = sp.utilities.lambdify(args, hlp)
+
+    test_problems = dict()
+    # Problem format: (kernel, singular_pt, basis, exact, include_pt)
+    # include_pt indicates whether to include the nearest point on the element
+    # in the integration. For some highly singular integrals, ignoring this
+    # point does not hurt convergence and is much more numerically stable.
+    test_problems['single1'] = (single_layer, 0.2, legendre(1), 0.0628062411975970, True)
+    test_problems['single16'] = (single_layer, 0.2, legendre(16), -0.00580747813511577, True)
+    test_problems['double1'] = (double_layer, 0.2, legendre(1), 0.0, True)
+    test_problems['double16'] = (double_layer, 0.2, legendre(16), 0.0, True)
+    test_problems['hyper1'] = (hypersing, 0.2, legendre(1), -0.130846, True)
+    test_problems['hyper16'] = (hypersing, 0.2, legendre(16), 0.0, True)
+    # run(test_problems['single1'], 'single1')
+    # run(test_problems['single16'], 'single16')
+    # run(test_problems['double1'], 'double1')
+    # run(test_problems['double16'], 'double16')
+    run(test_problems['hyper1'], 'hyper1')
+    run(test_problems['hyper16'], 'hyper16')
 
 if __name__ == '__main__':
-    simple()
-    # rich_fun()
+    main()
