@@ -5,6 +5,8 @@ from gaussian_quad import gaussxw
 from scipy.interpolate import BarycentricInterpolator as bi
 import sympy as sp
 
+settings = dict()
+settings['n'] = 4
 
 
 def integrate(x_min, x_max, f, q):
@@ -33,12 +35,12 @@ def recursive(sing_pt, sizes, f, q, include_pt = False):
     return start + rem
 
 
-def richardson(hs, values, step):
+def richardson(hs, values, step, error_step, error_offset):
     rich = [values]
     hs_ratio = hs[:-1] / hs[1:]
     for m in range(1, len(values)):
         prev_rich = rich[m - 1]
-        mult = hs_ratio[(m - 1):] ** m
+        mult = hs_ratio[(m - 1):] ** (error_step * m + error_offset)
         factor = (1.0 / (mult - 1.0))
         next_rich = factor * (mult * prev_rich[1:] - prev_rich[:-1])
         rich.append(next_rich)
@@ -67,7 +69,8 @@ def plot_best_rich(hs, rich, perfect, which):
     fig.savefig('error_' + which + '.pdf')
 
 def run(problem, name):
-    K, sing_pt, basis, perfect, include_pt = problem
+    K, sing_pt, basis, perfect, include_pt, error_step, error_offset = problem
+    print("Testing on problem: " + name + " with error step:" + str(error_step))
 
     high_quad_order = 500
     highquad = gaussxw(high_quad_order)
@@ -78,7 +81,7 @@ def run(problem, name):
 
     safe_dist = 6.0 / low_quad_order
 
-    n = 4
+    n = settings['n']
     step = 2.0
     hs = safe_dist * ((1.0 / step) ** np.arange(0, n))
     print("Distances are: " + str(hs))
@@ -98,11 +101,12 @@ def run(problem, name):
               "Distance error " + str(i) + ": " + str(exact - perfect))
         integrals.append(est)
     integrals = np.array(integrals)
-    no_rich_error = integrals[-1] - perfect
+    no_rich_error = abs(integrals[-1] - perfect)
     print("Raw integral error: " + str(no_rich_error))
 
-    rich = richardson(hs, integrals, step)
-    print("Best richardson error: " + str(abs(rich[-1][-1] - perfect))) + "\n\n"
+    rich = richardson(hs, integrals, step, error_step, error_offset)
+    rich_error = abs(rich[-1][-1] - perfect)
+    print("Best richardson error: " + str(rich_error)) + "\n\n"
 
     interp_est = interp(integrals, hs)
     # print("Interpolation error: " + str(np.array(interp_est) - perfect))
@@ -133,23 +137,27 @@ def main():
     double_layer = sp.utilities.lambdify(args, dlp)
     hypersing = sp.utilities.lambdify(args, hlp)
 
+    settings['n'] = 5
+
     test_problems = dict()
-    # Problem format: (kernel, singular_pt, basis, exact, include_pt)
+    # Problem format: (kernel, singular_pt, basis, exact, include_pt, error_step)
     # include_pt indicates whether to include the nearest point on the element
     # in the integration. For some highly singular integrals, ignoring this
     # point does not hurt convergence and is much more numerically stable.
-    test_problems['single1'] = (single_layer, 0.2, legendre(1), 0.0628062411975970, True)
-    test_problems['single16'] = (single_layer, 0.2, legendre(16), -0.00580747813511577, True)
-    test_problems['double1'] = (double_layer, 0.2, legendre(1), 0.0, True)
-    test_problems['double16'] = (double_layer, 0.2, legendre(16), 0.0, True)
-    test_problems['hyper1'] = (hypersing, 0.2, legendre(1), -0.130846, True)
-    test_problems['hyper16'] = (hypersing, 0.2, legendre(16), 0.0, True)
+    # error_step is the step between the error terms in the taylor expansion
+    # the true value
+    test_problems['single1'] = (single_layer, 0.2, legendre(1), 0.0628062411975970, True, 1, 0)
+    test_problems['single16'] = (single_layer, 0.2, legendre(16), -0.00580747813511577, True, 1, 0)
+    test_problems['double1'] = (double_layer, 0.2, legendre(1), 0.0, True, 1, 0)
+    test_problems['double16'] = (double_layer, 0.2, legendre(16), 0.0, True, 1, 0)
+    test_problems['hyper1'] = (hypersing, 0.2, legendre(1), -0.1308463358283272, True, 1, 0)
+    test_problems['hyper3'] = (hypersing, 0.2, legendre(3), 0.488588401102108, True, 1, 0)
     # run(test_problems['single1'], 'single1')
     # run(test_problems['single16'], 'single16')
     # run(test_problems['double1'], 'double1')
     # run(test_problems['double16'], 'double16')
     run(test_problems['hyper1'], 'hyper1')
-    run(test_problems['hyper16'], 'hyper16')
+    run(test_problems['hyper3'], 'hyper3')
 
 if __name__ == '__main__':
     main()
