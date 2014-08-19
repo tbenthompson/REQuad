@@ -60,15 +60,19 @@ def plot_all_rich(hs, rich, perfect):
     plt.legend()
     plt.show()
 
-def plot_best_rich(hs, rich, perfect, which):
+def plot_best_rich(hs, rich, perfect, which, fig, ax):
     best = [abs(r[0] - perfect) for r in rich]
-    fig, ax = plt.subplots(1)
-    ax.loglog(hs, best, 'o-', linewidth = 2, label = "RICH")
+    self_contained = False
+    if fig is None:
+        self_contained = True
+        fig, ax = plt.subplots(1)
+    ax.loglog(hs, best, 'o-', linewidth = 2, label = which)
     ax.set_xlabel('$h$')
     ax.set_ylabel('$E$')
-    fig.savefig('error_' + which + '.pdf')
+    if self_contained:
+        fig.savefig('error_' + which + '.pdf')
 
-def run(problem, name):
+def run(problem, name, fig, ax):
     K, sing_pt, basis, perfect, include_pt, error_step, error_offset = problem
     print("Testing on problem: " + name + " with error step:" + str(error_step))
 
@@ -106,13 +110,13 @@ def run(problem, name):
 
     rich = richardson(hs, integrals, step, error_step, error_offset)
     rich_error = abs(rich[-1][-1] - perfect)
-    print("Best richardson error: " + str(rich_error)) + "\n\n"
+    print("Best richardson error: " + str(rich_error))
 
     interp_est = interp(integrals, hs)
-    # print("Interpolation error: " + str(np.array(interp_est) - perfect))
+    print("Interpolation error: " + str(abs(np.array(interp_est)[-1] - perfect))) + "\n\n"
 
     # plot_all_rich(hs, rich, perfect)
-    plot_best_rich(hs, rich, perfect, name)
+    plot_best_rich(hs, rich, perfect, name, fig, ax)
 
     # This prints a random number
     print 88
@@ -131,13 +135,14 @@ def main():
     dist = sp.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
     slp = -1 / (2 * sp.pi) * sp.log(dist)
     dlp = sp.diff(slp, y1)
+    print dlp
     hlp = sp.diff(dlp, y2)
     args = (x1, x2, y1, y2)
     single_layer = sp.utilities.lambdify(args, slp)
     double_layer = sp.utilities.lambdify(args, dlp)
     hypersing = sp.utilities.lambdify(args, hlp)
 
-    settings['n'] = 5
+    settings['n'] = 4
 
     test_problems = dict()
     # Problem format: (kernel, singular_pt, basis, exact, include_pt, error_step)
@@ -148,16 +153,22 @@ def main():
     # the true value
     test_problems['single1'] = (single_layer, 0.2, legendre(1), 0.0628062411975970, True, 1, 0)
     test_problems['single16'] = (single_layer, 0.2, legendre(16), -0.00580747813511577, True, 1, 0)
-    test_problems['double1'] = (double_layer, 0.2, legendre(1), 0.0, True, 1, 0)
-    test_problems['double16'] = (double_layer, 0.2, legendre(16), 0.0, True, 1, 0)
+    test_problems['single32'] = (single_layer, 0.2, legendre(32), 0.002061099155941667, True, 1, 0)
+    test_problems['double1'] = (double_layer, 0.2, legendre(1), -0.1, True, 1, 0)
+    test_problems['double3'] = (double_layer, 0.2, legendre(3), 0.14, True, 1, 0)
     test_problems['hyper1'] = (hypersing, 0.2, legendre(1), -0.1308463358283272, True, 1, 0)
     test_problems['hyper3'] = (hypersing, 0.2, legendre(3), 0.488588401102108, True, 1, 0)
-    # run(test_problems['single1'], 'single1')
-    # run(test_problems['single16'], 'single16')
-    # run(test_problems['double1'], 'double1')
-    # run(test_problems['double16'], 'double16')
-    run(test_problems['hyper1'], 'hyper1')
-    run(test_problems['hyper3'], 'hyper3')
+
+    fig, ax = plt.subplots(1)
+    run(test_problems['single1'], 'single1', fig, ax)
+    run(test_problems['single16'], 'single16', fig, ax)
+    run(test_problems['single32'], 'single32', fig, ax)
+    run(test_problems['double1'], 'double1', fig, ax)
+    run(test_problems['double3'], 'double3', fig, ax)
+    run(test_problems['hyper1'], 'hyper1', fig, ax)
+    run(test_problems['hyper3'], 'hyper3', fig, ax)
+    ax.legend(loc = 'lower right')
+    fig.savefig('all_errors.pdf')
 
 if __name__ == '__main__':
     main()
