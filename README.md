@@ -1,4 +1,4 @@
-### REQuad 
+##### REQuad (Richardson Extrapolation Quadrature)
 
 Many interesting phyiscal and mathematical problems can be solved accurately
 through boundary element methods. However, oftentimes, these methods
@@ -15,6 +15,5 @@ The name in the legend indicates which integral:
 * single = Single Layer Potential
 * double = Double Layer Potential
 * hyper = Hypersingular 
-
 
 ![Error plot](all_errors.png "Error for the Poisson layer potentials as the distance to the boundary is refined.")
