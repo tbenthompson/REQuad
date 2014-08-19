@@ -177,6 +177,7 @@ def main():
     run(test_problems['hyper3'], 'hyper3', fig, ax)
     ax.legend(loc = 'lower right')
     fig.savefig('all_errors.pdf')
+    fig.savefig('all_errors.png')
 
 if __name__ == '__main__':
     main()
